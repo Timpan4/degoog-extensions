@@ -1,0 +1,92 @@
+{
+  "name": "wall-e Degoog extensions",
+  "description": "SearXNG providers and Cloudflare Access administration for Degoog.",
+  "engines": [
+    {
+      "path": "extensions/degoog/engines/google",
+      "name": "Google via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "web"
+    },
+    {
+      "path": "extensions/degoog/engines/duckduckgo",
+      "name": "DuckDuckGo via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "web"
+    },
+    {
+      "path": "extensions/degoog/engines/duckduckgo-images",
+      "name": "DuckDuckGo Images via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "images"
+    },
+    {
+      "path": "extensions/degoog/engines/duckduckgo-videos",
+      "name": "DuckDuckGo Videos via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "videos"
+    },
+    {
+      "path": "extensions/degoog/engines/duckduckgo-news",
+      "name": "DuckDuckGo News via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "news"
+    },
+    {
+      "path": "extensions/degoog/engines/soundcloud",
+      "name": "SoundCloud via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "music"
+    },
+    {
+      "path": "extensions/degoog/engines/github",
+      "name": "GitHub via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "it"
+    },
+    {
+      "path": "extensions/degoog/engines/crossref",
+      "name": "Crossref via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "science"
+    },
+    {
+      "path": "extensions/degoog/engines/openstreetmap",
+      "name": "OpenStreetMap via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "maps"
+    },
+    {
+      "path": "extensions/degoog/engines/wikicommons-files",
+      "name": "Wikimedia Commons via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "files"
+    },
+    {
+      "path": "extensions/degoog/engines/hackernews",
+      "name": "Hacker News via SearXNG",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0",
+      "type": "social"
+    }
+  ],
+  "plugins": [
+    {
+      "path": "extensions/degoog/plugins/cloudflare-access",
+      "name": "Cloudflare Access",
+      "description": "Cloudflare-only administrator login. Requires issuer, audience and administrator emails in the server environment.",
+      "version": "1.0.0",
+      "minDegoogVersion": "0.26.0"
+    }
+  ]
+}
