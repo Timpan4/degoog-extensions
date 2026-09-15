@@ -30,6 +30,13 @@ Cloudflare Access on every request and prevent search-only users from presenting
 another user's native `settings-token` cookie or `x-settings-token` header.
 Native Degoog sessions are process-local and are not bound to Access identities.
 
+## Google recovery plugin
+
+Adds a Google recovery link to failed Google searches and the search-bar menu.
+`!google-recovery` also opens a link to the recovery page. It requires the wall-e
+frontend's authenticated `/recovery` service; installing this plugin alone does
+not create a browser. All admitted users share the same temporary Firefox session.
+
 ## Publishing
 
 This repository contains generated, self-contained extension bundles. Source and

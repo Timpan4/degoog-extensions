@@ -85,6 +85,13 @@
       "path": "extensions/degoog/plugins/cloudflare-access",
       "name": "Cloudflare Access",
       "description": "Cloudflare-only administrator login. Requires issuer, audience and administrator emails in the server environment.",
+      "version": "1.0.1",
+      "minDegoogVersion": "0.26.0"
+    },
+    {
+      "path": "extensions/degoog/plugins/google-recovery",
+      "name": "Google recovery",
+      "description": "Open the shared CAPTCHA browser from failed Google searches or !google-recovery. Requires the wall-e recovery frontend.",
       "version": "1.0.0",
       "minDegoogVersion": "0.26.0"
     }

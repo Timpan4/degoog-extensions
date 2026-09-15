@@ -747,7 +747,7 @@ function createAccessVerifier(config, keys = createRemoteJWKSet(new URL(`${confi
       throw new Error("A user application token is required");
     }
     const email = payload.email.trim().toLowerCase();
-    return { email, administrator: config.administrators.has(email) };
+    return { email, administrator: config.administrators.has(email), expiresAt: payload.exp * 1000 };
   };
 }
 
