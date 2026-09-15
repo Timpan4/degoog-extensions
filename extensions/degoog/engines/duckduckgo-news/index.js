@@ -25,7 +25,7 @@ function mapResult(result, name) {
     ...result.length ? { duration: String(result.length) } : {}
   };
 }
-function createSearxEngine({ name, engine, timeRange = false, paging = true }, { fetcher = fetch, baseUrl = process.env.SEARXNG_URL } = {}) {
+function createSearxEngine({ name, engine, timeRange = false, paging = true }, { fetcher = fetch, baseUrl = process.env.SEARXNG_URL, region = process.env.SEARXNG_REGION } = {}) {
   return {
     name,
     async executeSearch(query, page = 1, time = "any", context = {}) {
@@ -38,8 +38,8 @@ function createSearxEngine({ name, engine, timeRange = false, paging = true }, {
         return [];
       const url = new URL("search", `${baseUrl?.replace(/\/$/, "")}/`);
       url.search = new URLSearchParams({ q: query, engines: engine, pageno: String(page), format: "json" });
-      if (context.lang)
-        url.searchParams.set("language", context.lang);
+      const language = context.lang || "en";
+      url.searchParams.set("language", region && engine.startsWith("duckduckgo") && language !== "all" ? `${language.split("-")[0]}-${region}` : language);
       if (timeRanges[time])
         url.searchParams.set("time_range", timeRanges[time]);
       const safe = context.imageFilter?.nsfw;
