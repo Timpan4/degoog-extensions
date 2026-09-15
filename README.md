@@ -32,10 +32,14 @@ Native Degoog sessions are process-local and are not bound to Access identities.
 
 ## Google recovery plugin
 
-Adds a Google recovery link to failed Google searches and the search-bar menu.
-`!google-recovery` also opens a link to the recovery page. It requires the wall-e
-frontend's authenticated `/recovery` service; installing this plugin alone does
-not create a browser. All admitted users share the same temporary Firefox session.
+Opens the shared browser over the search page when Google has a confirmed CAPTCHA
+suspension. Solve it, then select **I solved it, retry Google**. Closing the popup
+keeps other results usable and suppresses further automatic popups for that search.
+The recovery link, search-bar menu and `!google-recovery` can reopen it manually.
+
+Requires the wall-e frontend's authenticated `/recovery` service; installing this
+plugin alone does not create a browser. All admitted users share the same temporary
+Firefox session. Recovery does not guarantee that Google accepts the next request.
 
 ## Publishing
 

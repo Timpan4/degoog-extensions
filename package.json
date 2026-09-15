@@ -91,8 +91,8 @@
     {
       "path": "extensions/degoog/plugins/google-recovery",
       "name": "Google recovery",
-      "description": "Open the shared CAPTCHA browser from failed Google searches or !google-recovery. Requires the wall-e recovery frontend.",
-      "version": "1.0.0",
+      "description": "Automatically open the shared browser for Google CAPTCHAs and retry within your search. Requires the wall-e recovery frontend.",
+      "version": "1.0.1",
       "minDegoogVersion": "0.26.0"
     }
   ]

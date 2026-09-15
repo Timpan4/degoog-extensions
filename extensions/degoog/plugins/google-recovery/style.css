@@ -1,0 +1,7 @@
+#google-recovery-dialog { box-sizing: border-box; width: 96vw; height: 94dvh; max-width: none; max-height: none; padding: 0; border: 1px solid #80868b; border-radius: .6rem; background: #202124; color: #eee; }
+#google-recovery-dialog[open] { display: flex; flex-direction: column; }
+#google-recovery-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+#google-recovery-dialog .google-recovery-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem 1rem; }
+#google-recovery-dialog button { font: inherit; color: inherit; background: #303134; border: 1px solid #80868b; border-radius: .4rem; padding: .5rem .75rem; cursor: pointer; }
+#google-recovery-dialog button:focus-visible { outline: 2px solid #b6d3ff; outline-offset: 2px; }
+#google-recovery-dialog iframe { width: 100%; flex: 1; min-height: 0; border: 0; }
