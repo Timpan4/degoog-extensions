@@ -25,7 +25,7 @@ function mapResult(result, name) {
     ...result.length ? { duration: String(result.length) } : {}
   };
 }
-function createSearxEngine({ name, engine, category, timeRange = false, paging = true }, { fetcher = fetch, baseUrl = process.env.SEARXNG_URL } = {}) {
+function createSearxEngine({ name, engine, timeRange = false, paging = true }, { fetcher = fetch, baseUrl = process.env.SEARXNG_URL } = {}) {
   return {
     name,
     async executeSearch(query, page = 1, time = "any", context = {}) {
@@ -37,7 +37,7 @@ function createSearxEngine({ name, engine, category, timeRange = false, paging =
       if (!paging && page > 1)
         return [];
       const url = new URL("search", `${baseUrl?.replace(/\/$/, "")}/`);
-      url.search = new URLSearchParams({ q: query, engines: engine, categories: category, pageno: String(page), format: "json" });
+      url.search = new URLSearchParams({ q: query, engines: engine, pageno: String(page), format: "json" });
       if (context.lang)
         url.searchParams.set("language", context.lang);
       if (timeRanges[time])
@@ -54,7 +54,11 @@ function createSearxEngine({ name, engine, category, timeRange = false, paging =
       const failure = body.unresponsive_engines.find((item) => Array.isArray(item) && item[0] === engine);
       if (failure) {
         const reason = String(failure[1]);
-        throw context.engineError?.("error", `${name}: ${reason}`) ?? new Error(`${name}: ${reason}`);
+        const status = /captcha/i.test(reason) ? "captcha" : /too many requests?|HTTP error 429/i.test(reason) ? "rate_limited" : /access denied|HTTP error 40[23]/i.test(reason) ? "blocked" : /timeout|timed out/i.test(reason) ? "timeout" : undefined;
+        throw status && context.engineError?.(status, `${name}: ${reason}`, { engine: name }) || new Error(`${name}: ${reason}`);
+      }
+      if (body.results.some((result) => !Array.isArray(result?.engines) || !result.engines.includes(engine))) {
+        throw new Error(`SearXNG returned results outside the requested ${name} provider`);
       }
       return body.results.map((result) => mapResult(result, name)).filter(Boolean);
     }
