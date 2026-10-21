@@ -85,7 +85,7 @@
       "path": "extensions/degoog/plugins/cloudflare-access",
       "name": "Cloudflare Access",
       "description": "Cloudflare-only administrator login. Requires issuer, audience and administrator emails in the server environment.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "minDegoogVersion": "0.26.0"
     },
     {

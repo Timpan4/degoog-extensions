@@ -3,7 +3,7 @@
 var encoder = new TextEncoder;
 var decoder = new TextDecoder;
 var strictDecoder = new TextDecoder("utf-8", { fatal: true });
-var MAX_INT32 = 2 ** 32;
+var UINT32_RANGE = 2 ** 32;
 function concat(...buffers) {
   const size = buffers.reduce((acc, { length }) => acc + length, 0), buf = new Uint8Array(size);
   let i = 0;
@@ -162,23 +162,23 @@ function isDisjoint(...headers) {
 function decodeBase64url(value, label, ErrorClass) {
   try {
     return decode(value);
-  } catch {
-    throw new ErrorClass(`Failed to base64url decode the ${label}`);
+  } catch (cause) {
+    throw new ErrorClass(`Failed to base64url decode the ${label}`, { cause });
   }
 }
-function encodeBase64url(value, label, ErrorClass) {
+function encodeAsciiMember(value, label, ErrorClass) {
   try {
     return encode(value);
-  } catch {
-    throw new ErrorClass(`The ${label} is not a valid base64url string`);
+  } catch (cause) {
+    throw new ErrorClass(`The ${label} is not a valid base64url string`, { cause });
   }
 }
-function parseJoseHeader(b64, ErrorClass, message) {
+function parseJoseHeader(encodedProtectedHeader, ErrorClass, message) {
   let parsed;
   try {
-    parsed = JSON.parse(strictDecoder.decode(decode(b64)));
-  } catch {
-    throw new ErrorClass(message);
+    parsed = JSON.parse(strictDecoder.decode(decode(encodedProtectedHeader)));
+  } catch (cause) {
+    throw new ErrorClass(message, { cause });
   }
   if (!isObject(parsed))
     throw new ErrorClass(message);
@@ -236,15 +236,15 @@ var jwkMatchesOp = (entry, key, usage) => {
   }
 };
 async function prepareKey(entry, key, usage) {
-  const { alg, secret } = entry, privateKey = usage === "decrypt" || usage === "sign";
+  const { alg, secret } = entry, requiresPrivateKey = usage === "decrypt" || usage === "sign";
   if (secret && key instanceof Uint8Array)
     return key;
   let normalized, keyObject;
   if (isObject(key)) {
     if (normalized = normalizeJwk(key), typeof normalized.kty != "string")
       throw invalidKeyType(alg, key, secret);
-    if (!(secret ? normalized.kty === "oct" && typeof normalized.k == "string" : normalized.kty !== "oct" && (privateKey ? normalized.kty === "AKP" && typeof normalized.priv == "string" || typeof normalized.d == "string" : normalized.d === undefined && normalized.priv === undefined)))
-      throw new TypeError(secret ? 'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present' : `JSON Web Key for this operation must be a ${privateKey ? "private" : "public"} JWK`);
+    if (!(secret ? normalized.kty === "oct" && typeof normalized.k == "string" : normalized.kty !== "oct" && (requiresPrivateKey ? normalized.kty === "AKP" && typeof normalized.priv == "string" || typeof normalized.d == "string" : normalized.d === undefined && normalized.priv === undefined)))
+      throw new TypeError(secret ? 'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present' : `JSON Web Key for this operation must be a ${requiresPrivateKey ? "private" : "public"} JWK`);
     if (jwkMatchesOp(entry, normalized, usage), normalized.kty === "oct")
       return decode(normalized.k);
     if (!Object.isFrozen(key)) {
@@ -254,7 +254,7 @@ async function prepareKey(entry, key, usage) {
   } else {
     if (!isKeyLike(key))
       throw invalidKeyType(alg, key, secret);
-    const expectedType = secret ? "secret" : privateKey ? "private" : "public";
+    const expectedType = secret ? "secret" : requiresPrivateKey ? "private" : "public";
     if (key.type !== expectedType && (secret || ["secret", "public", "private"].includes(key.type)))
       throw new TypeError(`${tag(key)} instances must be of type "${expectedType}" for the ${alg} algorithm`);
     if (isCryptoKey(key))
@@ -393,8 +393,8 @@ function eddsa() {
     usages: sig
   };
 }
-function mldsa(bits) {
-  const subtle = { name: `ML-DSA-${bits}` };
+function mldsa(parameterSet) {
+  const subtle = { name: `ML-DSA-${parameterSet}` };
   return {
     kty: ["AKP"],
     subtle,
@@ -432,21 +432,23 @@ function jwsAlgorithm(alg) {
 function prepareVerify(options) {
   return [options && validateAlgorithms("algorithms", options.algorithms), options?.crit];
 }
-function parseProtectedHeader(encodedProtected) {
-  return encodedProtected === undefined ? {} : parseJoseHeader(encodedProtected, JWSInvalid, "JWS Protected Header is invalid");
+function parseProtectedHeader(encodedProtectedHeader) {
+  return encodedProtectedHeader === undefined ? {} : parseJoseHeader(encodedProtectedHeader, JWSInvalid, "JWS Protected Header is invalid");
 }
 function encodeCompactUnencodedPayload(payload) {
   try {
     return encode(payload);
-  } catch {
-    throw new JWSInvalid("JWS Compact Serialization payload must use only ASCII characters");
+  } catch (cause) {
+    throw new JWSInvalid("JWS Compact Serialization payload must use only ASCII characters", {
+      cause
+    });
   }
 }
 async function verifySignature(jws, shared, key, encodeUnencodedPayload, parsedProtected) {
-  const { protected: encodedProtected, header, payload: inputPayload } = jws, parsedProt = parsedProtected ?? parseProtectedHeader(encodedProtected);
-  if (!isDisjoint(parsedProt, header))
+  const { protected: encodedProtectedHeader, header, payload: inputPayload } = jws, protectedHeader = parsedProtected ?? parseProtectedHeader(encodedProtectedHeader);
+  if (!isDisjoint(protectedHeader, header))
     throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
-  const joseHeader = { ...parsedProt, ...header }, b64 = validateB64(parsedProt, validateCrit(JWSInvalid, JWS_RECOGNIZED, shared[1], parsedProt, joseHeader)), { alg } = joseHeader;
+  const joseHeader = { ...protectedHeader, ...header }, b64 = validateB64(protectedHeader, validateCrit(JWSInvalid, JWS_RECOGNIZED, shared[1], protectedHeader, joseHeader)), { alg } = joseHeader;
   if (typeof alg != "string" || !alg)
     throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
   if (shared[0] && !shared[0].has(alg))
@@ -458,17 +460,19 @@ async function verifySignature(jws, shared, key, encodeUnencodedPayload, parsedP
     throw new JWSInvalid("JWS Payload must be a string or an Uint8Array instance");
   const signingPayload = b64 || typeof inputPayload != "string" ? inputPayload : encodeUnencodedPayload(inputPayload);
   let resolvedKey = false;
-  typeof key == "function" && (key = await key(parsedProt, jws), resolvedKey = true);
-  const entry = jwsAlgorithm(alg), data = concat(encodedProtected !== undefined ? encode(encodedProtected) : new Uint8Array, encode("."), typeof signingPayload == "string" ? shared[2] ??= encodeBase64url(signingPayload, "payload", JWSInvalid) : signingPayload), signature = decodeBase64url(jws.signature, "signature", JWSInvalid), k = await prepareKey(entry, key, "verify"), cryptoKey = await rawKey(k, entry.subtle, "verify");
+  typeof key == "function" && (key = await key(protectedHeader, jws), resolvedKey = true);
+  const entry = jwsAlgorithm(alg), signingInput = concat(encodedProtectedHeader !== undefined ? encode(encodedProtectedHeader) : new Uint8Array, encode("."), typeof signingPayload == "string" ? shared[2] ??= encodeAsciiMember(signingPayload, "payload", JWSInvalid) : signingPayload), signature = decodeBase64url(jws.signature, "signature", JWSInvalid), verificationKey = await prepareKey(entry, key, "verify"), cryptoKey = await rawKey(verificationKey, entry.subtle, "verify");
   entry.minRsaBits && checkModulusLength(entry.alg, cryptoKey);
   let verified = false;
   try {
-    verified = await crypto.subtle.verify(entry.signing, cryptoKey, signature, data);
-  } catch {}
+    verified = await crypto.subtle.verify(entry.signing, cryptoKey, signature, signingInput);
+  } catch (cause) {
+    throw new JWSSignatureVerificationFailed(undefined, { cause });
+  }
   if (!verified)
     throw new JWSSignatureVerificationFailed;
   const result = { payload: typeof signingPayload == "string" ? decodeBase64url(signingPayload, "payload", JWSInvalid) : signingPayload };
-  return encodedProtected !== undefined && (result.protectedHeader = parsedProt), header !== undefined && (result.unprotectedHeader = header), resolvedKey ? [{ ...result, key: k }, b64] : [result, b64];
+  return encodedProtectedHeader !== undefined && (result.protectedHeader = protectedHeader), header !== undefined && (result.unprotectedHeader = header), resolvedKey ? [{ ...result, key: verificationKey }, b64] : [result, b64];
 }
 async function verifyCompact(jws, shared, key) {
   if (jws instanceof Uint8Array && (jws = decoder.decode(jws)), typeof jws != "string")
@@ -498,8 +502,8 @@ function secs(str) {
   typeof str != "string" && invalidDuration();
   const matched = REGEX.exec(str);
   (!matched || matched[4] && matched[1]) && invalidDuration();
-  const value = parseFloat(matched[2]), numericDate2 = Math.round(value * multipliers[matched[3][0].toLowerCase()]);
-  return Number.isFinite(numericDate2) || invalidDuration(), matched[1] === "-" || matched[4] === "ago" ? -numericDate2 : numericDate2;
+  const value = parseFloat(matched[2]), durationSeconds = Math.round(value * multipliers[matched[3][0].toLowerCase()]);
+  return Number.isFinite(durationSeconds) || invalidDuration(), matched[1] === "-" || matched[4] === "ago" ? -durationSeconds : durationSeconds;
 }
 function validateInput(label, input) {
   if (!Number.isFinite(input))
@@ -511,33 +515,35 @@ var normalizeTyp = (value) => {
   return value.includes("/") ? normalized : `application/${normalized}`;
 };
 var checkAudiencePresence = (audPayload, audOption) => typeof audPayload == "string" ? audOption.includes(audPayload) : Array.isArray(audPayload) ? audOption.some((aud) => audPayload.includes(aud)) : false;
-function validateNumericDate(payload, claim, required = false) {
-  const value = payload[claim];
+function validateNumericDate(claimsSet, claim, required = false) {
+  const value = claimsSet[claim];
   if (!(value === undefined && !required)) {
     if (typeof value != "number")
-      throw new JWTClaimValidationFailed(`"${claim}" claim must be a number`, payload, claim, "invalid");
+      throw new JWTClaimValidationFailed(`"${claim}" claim must be a number`, claimsSet, claim, "invalid");
     return value;
   }
 }
-function unexpectedClaim(payload, claim) {
-  throw new JWTClaimValidationFailed(`unexpected "${claim}" claim value`, payload, claim, checkFailed);
+function unexpectedClaim(claimsSet, claim) {
+  throw new JWTClaimValidationFailed(`unexpected "${claim}" claim value`, claimsSet, claim, checkFailed);
 }
-function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
-  let payload;
+function validateClaimsSet(protectedHeader, claimsSetBytes, options = {}) {
+  let claimsSet;
   try {
-    payload = JSON.parse(strictDecoder.decode(encodedPayload));
-  } catch {}
-  if (!isObject(payload))
+    claimsSet = JSON.parse(strictDecoder.decode(claimsSetBytes));
+  } catch (cause) {
+    throw new JWTInvalid("JWT Claims Set must be a top-level JSON object", { cause });
+  }
+  if (!isObject(claimsSet))
     throw new JWTInvalid("JWT Claims Set must be a top-level JSON object");
   const { typ } = options;
   if (typ !== undefined && (typeof protectedHeader.typ != "string" || normalizeTyp(protectedHeader.typ) !== normalizeTyp(typ)))
-    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', payload, "typ", checkFailed);
+    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', claimsSet, "typ", checkFailed);
   const { requiredClaims = [], issuer, subject, audience, maxTokenAge } = options, presenceCheck = [...requiredClaims];
   maxTokenAge !== undefined && presenceCheck.push("iat"), audience !== undefined && presenceCheck.push("aud"), subject !== undefined && presenceCheck.push("sub"), issuer !== undefined && presenceCheck.push("iss");
   for (const claim of new Set(presenceCheck.reverse()))
-    if (!Object.hasOwn(payload, claim))
-      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, payload, claim, "missing");
-  issuer !== undefined && !(Array.isArray(issuer) ? issuer : [issuer]).includes(payload.iss) && unexpectedClaim(payload, "iss"), subject !== undefined && payload.sub !== subject && unexpectedClaim(payload, "sub"), audience !== undefined && !checkAudiencePresence(payload.aud, typeof audience == "string" ? [audience] : audience) && unexpectedClaim(payload, "aud");
+    if (!Object.hasOwn(claimsSet, claim))
+      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, claimsSet, claim, "missing");
+  issuer !== undefined && !(Array.isArray(issuer) ? issuer : [issuer]).includes(claimsSet.iss) && unexpectedClaim(claimsSet, "iss"), subject !== undefined && claimsSet.sub !== subject && unexpectedClaim(claimsSet, "sub"), audience !== undefined && !checkAudiencePresence(claimsSet.aud, typeof audience == "string" ? [audience] : audience) && unexpectedClaim(claimsSet, "aud");
   const { clockTolerance } = options;
   let tolerance = 0;
   if (typeof clockTolerance == "string")
@@ -548,20 +554,20 @@ function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
     tolerance = clockTolerance;
   }
   validateInput("clockTolerance option", tolerance);
-  const { currentDate } = options, now = validateInput("currentDate option", epoch(currentDate === undefined ? /* @__PURE__ */ new Date : currentDate)), iat = validateNumericDate(payload, "iat", maxTokenAge !== undefined), nbf = validateNumericDate(payload, "nbf");
+  const { currentDate } = options, now = validateInput("currentDate option", epoch(currentDate === undefined ? /* @__PURE__ */ new Date : currentDate)), iat = validateNumericDate(claimsSet, "iat", maxTokenAge !== undefined), nbf = validateNumericDate(claimsSet, "nbf");
   if (nbf !== undefined && nbf > now + tolerance)
-    throw new JWTClaimValidationFailed('"nbf" claim timestamp check failed', payload, "nbf", checkFailed);
-  const exp = validateNumericDate(payload, "exp");
+    throw new JWTClaimValidationFailed('"nbf" claim timestamp check failed', claimsSet, "nbf", checkFailed);
+  const exp = validateNumericDate(claimsSet, "exp");
   if (exp !== undefined && exp <= now - tolerance)
-    throw new JWTExpired('"exp" claim timestamp check failed', payload, "exp", checkFailed);
+    throw new JWTExpired('"exp" claim timestamp check failed', claimsSet, "exp", checkFailed);
   if (maxTokenAge !== undefined) {
     const age = now - iat, max = validateInput("maxTokenAge option", typeof maxTokenAge == "number" ? maxTokenAge : secs(maxTokenAge));
     if (age - tolerance > max)
-      throw new JWTExpired('"iat" claim timestamp check failed (too far in the past)', payload, "iat", checkFailed);
+      throw new JWTExpired('"iat" claim timestamp check failed (too far in the past)', claimsSet, "iat", checkFailed);
     if (age < -tolerance)
-      throw new JWTClaimValidationFailed('"iat" claim timestamp check failed (it should be in the past)', payload, "iat", checkFailed);
+      throw new JWTClaimValidationFailed('"iat" claim timestamp check failed (it should be in the past)', claimsSet, "iat", checkFailed);
   }
-  return payload;
+  return claimsSet;
 }
 
 // node_modules/jose/dist/webapi/jwt/verify.js
@@ -578,8 +584,8 @@ function isUsableJWK(jwk, entry, alg, kid) {
   const { kty, key_ops: keyOps, ext, kid: jwkKid, alg: jwkAlg, use, crv } = jwk;
   return (ext === undefined || typeof ext == "boolean") && (keyOps === undefined || Array.isArray(keyOps) && keyOps.every((operation, index) => typeof operation == "string" && keyOps.indexOf(operation) === index) && keyOps.includes("verify")) && entry.kty.includes(kty) && (kid === undefined || typeof kid == "string" && kid === jwkKid) && (jwkAlg === undefined ? kty !== "AKP" : alg === jwkAlg) && (use === undefined || use === "sig") && (!entry.crv || crv === entry.crv);
 }
-async function importWithAlgCache(cache2, jwk, entry) {
-  const cached = cache2.get(jwk) || cache2.set(jwk, {}).get(jwk), { alg } = entry;
+async function importWithAlgCache(cache, jwk, entry) {
+  const cached = cache.get(jwk) || cache.set(jwk, {}).get(jwk), { alg } = entry;
   if (cached[alg] === undefined) {
     const pending = jwkToKey(entry, jwk, true).then((key) => {
       if (key.type !== "public")
@@ -596,7 +602,9 @@ function createLocalJWKSet(jwks) {
   let snapshot;
   try {
     snapshot = structuredClone(jwks);
-  } catch {}
+  } catch (cause) {
+    throw new JWKSInvalid("JSON Web Key Set malformed", { cause });
+  }
   if (!isJwkSet(snapshot))
     throw new JWKSInvalid("JSON Web Key Set malformed");
   const metadata = snapshot.keys.map((jwk) => {
@@ -630,7 +638,7 @@ function isCloudflareWorkers() {
   return typeof WebSocketPair < "u" || typeof navigator < "u" && navigator.userAgent === "Cloudflare-Workers" || typeof EdgeRuntime < "u" && EdgeRuntime === "vercel";
 }
 var USER_AGENT;
-(typeof navigator > "u" || !navigator.userAgent?.startsWith?.("Mozilla/5.0 ")) && (USER_AGENT = "jose/v6.2.12");
+(typeof navigator > "u" || !navigator.userAgent?.startsWith?.("Mozilla/5.0 ")) && (USER_AGENT = "jose/v6.2.13");
 var customFetch = /* @__PURE__ */ Symbol();
 async function fetchJwks(url, headers, signal, fetchImpl = fetch) {
   const response = await fetchImpl(url, {
@@ -639,14 +647,14 @@ async function fetchJwks(url, headers, signal, fetchImpl = fetch) {
     redirect: "manual",
     headers
   }).catch((err) => {
-    throw err.name === "TimeoutError" ? new JWKSTimeout : err;
+    throw err.name === "TimeoutError" ? new JWKSTimeout(undefined, { cause: err }) : err;
   });
   if (response.status !== 200)
     throw new JOSEError("Expected 200 OK from the JSON Web Key Set HTTP response");
   try {
     return await response.json();
-  } catch {
-    throw new JOSEError("Failed to parse the JSON Web Key Set HTTP response as JSON");
+  } catch (cause) {
+    throw new JOSEError("Failed to parse the JSON Web Key Set HTTP response as JSON", { cause });
   }
 }
 var jwksCache = /* @__PURE__ */ Symbol();
@@ -666,10 +674,10 @@ function createRemoteJWKSet(url, options) {
     throw new TypeError('"timeoutDuration" option must be a non-negative integer');
   const timeoutDuration = typeof timeoutOption == "number" ? timeoutOption : 5000, cooldownDuration = validateDuration(opts.cooldownDuration, 30000, "cooldownDuration"), cacheMaxAge = validateDuration(opts.cacheMaxAge, 600000, "cacheMaxAge"), headers = new Headers(opts.headers);
   USER_AGENT && !headers.has("User-Agent") && headers.set("User-Agent", USER_AGENT), headers.has("accept") || headers.set("accept", "application/json, application/jwk-set+json");
-  const fetchImpl = opts[customFetch], cache2 = opts[jwksCache];
+  const fetchImpl = opts[customFetch], cache = opts[jwksCache];
   let jwksTimestamp, pendingFetch, reloadSequence = 0, appliedSequence = 0, local;
-  if (cache2 && typeof cache2 == "object") {
-    const { uat, jwks } = cache2;
+  if (cache && typeof cache == "object") {
+    const { uat, jwks } = cache;
     isFreshFor(uat, cacheMaxAge) && isJwkSet(jwks) && (jwksTimestamp = uat, local = createLocalJWKSet(jwks));
   }
   const reload = async () => {
@@ -680,7 +688,7 @@ function createRemoteJWKSet(url, options) {
           return;
         local = next;
         const updatedAt = Date.now();
-        cache2 && (cache2.uat = updatedAt, cache2.jwks = json), jwksTimestamp = updatedAt, appliedSequence = sequence;
+        cache && (cache.uat = updatedAt, cache.jwks = json), jwksTimestamp = updatedAt, appliedSequence = sequence;
       }).finally(() => {
         pendingFetch === current && (pendingFetch = undefined);
       });
@@ -778,6 +786,6 @@ var middleware = createMiddleware((request) => {
   return verifier(request);
 });
 export {
-  middleware,
-  createMiddleware
+  createMiddleware,
+  middleware
 };

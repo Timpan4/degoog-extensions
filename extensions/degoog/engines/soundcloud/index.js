@@ -65,8 +65,8 @@ function createSearxEngine({ name, engine, timeRange = false, paging = true }, {
   };
 }
 export {
-  mapResult,
-  createSearxEngine
+  createSearxEngine,
+  mapResult
 };
 
 export const type = "music";

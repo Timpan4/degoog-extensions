@@ -10,6 +10,6 @@ var google_recovery_default = {
 };
 var searchBarActions = [{ id: "google-recovery", label: "Google recovery", type: "custom" }];
 export {
-  searchBarActions,
-  google_recovery_default as default
+  google_recovery_default as default,
+  searchBarActions
 };
